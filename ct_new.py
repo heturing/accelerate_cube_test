@@ -3,7 +3,10 @@ from six.moves import cStringIO
 from pysmt.fnode import FNodeContent, FNode
 from pysmt.shortcuts import And, is_sat, get_model, get_unsat_core
 from pysmt.rewritings import conjunctive_partition
+from pysmt.operators import SYMBOL
+from pysmt.typing import INT
 import numpy as np
+import smith_nf
 
 # This a used to show the result of a Formula.
 def pre_traversal(tree):
@@ -13,7 +16,7 @@ def pre_traversal(tree):
         pre_traversal(tree.rightchild)
 
 # Defined by operator.py
-symbol_dict = {13: "+", 14: "-", 15: "*", 16: "<=", 17: "<", 18: "="}
+symbol_dict = {11:"INT_CONSTANT", 13: "+", 14: "-", 15: "*", 16: "<=", 17: "<", 18: "="}
 
 class BinaryTree(object):
     def __init__(self, root_value):
@@ -116,7 +119,7 @@ class Formula(BinaryTree):
 # 1. Find all exclipit equations in the input.
 # 2. Find all implicit euqations among the left formulas.(Put into solver)
 # 3. Operate Smith Normal Form Convertion and get a list of equations.
-# 4. Substitute according to the result of 3 and get a new question.
+# 4. Substitute variables according to the result of 3 and get a new question.
 # 5. Output this question in smtlib.
 #
 # Details:
@@ -172,6 +175,10 @@ def find_same_formula(L, f):
         if l.args() == f.args() and l.node_type() == 16:
             return l
 
+def fnode_to_int(F):
+    if F.is_constant():
+        return float(F.serialize())
+
 def is_int_mul_val(term):
     if term.is_symbol() == False and term. is_constant() == False:
         t0, t1 = term.args()
@@ -213,6 +220,7 @@ def find_coefficient_in_term(term, variable):
     
 
 # get the term of the form (int sym var) by compare the size.
+# if the return value is not 0, the return type should be Fnode, and it cannot be used to abs().
 def extract_coefficient_according_to_variable_in_formula(formula, variable):
     result = []
     left = formula.args()[0]
@@ -224,7 +232,7 @@ def extract_coefficient_according_to_variable_in_formula(formula, variable):
         result.extend(find_coefficient_in_term(c,variable))
     index =  have_non_zero(result)
     if index != -1:
-        result = [result[index]]
+        result = [fnode_to_int(result[index])]
     else:
         result = [0]
     return result
@@ -242,7 +250,39 @@ def extract_coefficient_in_formulas(formulas, variable_list):
     for f in formulas:
         temp.append(extract_coefficient_in_formula(f, variable_list))
     return np.array(temp)
+
+def extract_right_side_of_formulas(formulas):
+    result = []
+    for f in formulas:
+        result.append(fnode_to_int(f.args()[1]))
+    return np.array([np.array(result)]).T
     
+def create_new_variable(variable_index):
+    variable_name = "new_variable" + str(variable_index)
+    content = FNodeContent(SYMBOL,(),(variable_name, INT))
+    node = FNode(content, 10000+variable_index)
+    return node
+
+def create_new_fnode_for_num(num):
+    content = FNodeContent(11,(),long(num))
+    node = FNode(content, 100000+num)
+    return node
+
+    
+def mul_num_and_fnode(num, node):
+    node0 = create_new_fnode_for_num(num)
+    content = FNodeContent(15, (node0, node), None)
+    result = FNode(content, 200000+num)
+    return result
+
+# assume that the length of nums and nodes is same.
+def mul_nums_and_fnodes(nums, nodes):
+    temp = []
+    for index, n in enumerate(nums):
+        temp.append(mul_num_and_fnode(n,nodes[index]))
+    content = FNodeContent(13, tuple(temp), None)
+    result = FNode(content, 300000+nums[0])
+    return result
     
 
 def test():
@@ -304,7 +344,67 @@ def test():
 
     #From now on, start step 3
     if equations != []:
+        for e in equations:
+            e.simplify()
+        variable_list = list(find_all_variables(equations))
+        equations_coefficient = extract_coefficient_in_formulas(equations, variable_list)
+        print("variable list is:\n %s" % (variable_list))
+        print("coefficient matrix is:\n%s" % (equations_coefficient))
+
+        # start smithify.
+        coefficient_matrix = smith_nf.Matrix(equations_coefficient)
+        right_matrix = extract_right_side_of_formulas(equations)
+        print(type(coefficient_matrix.matrix[:][0]))
+        coefficient_matrix.smithify()
+
+        print("smith normal form is:\n%s" % (coefficient_matrix.matrix))
+        print("matrix U is\n%s" % (coefficient_matrix.U))
+        print("matrix V is\n%s" % (coefficient_matrix.V))
+        print("right side is:\n%s" % (right_matrix))
+        
+        U_mul_right = np.dot(coefficient_matrix.U, right_matrix)
+        print("U * right =\n%s" % (U_mul_right))
+
+        # if the rank of the smithify matrix is n, then we just want first n elements of the u_mul_tight.
+        trancate_index = np.linalg.matrix_rank(coefficient_matrix.matrix)
+        U_mul_right_m = U_mul_right[:][:trancate_index]
+        print("After truncation, U * right = \n%s" % (U_mul_right_m))
+
+        variable_num = len(variable_list)
+        new_variables_list = []
+        for i in range(len(coefficient_matrix.V[0]) - trancate_index):
+            new_variables_list.append(create_new_variable(i))
+
+        transform_equations_dict = {}
+        for i in range(len(coefficient_matrix.V)):
+            temp0 = np.dot(coefficient_matrix.V[i][:trancate_index], U_mul_right_m)
+            temp0_node = create_new_fnode_for_num(temp0)
+            nums_list = coefficient_matrix.V[i][trancate_index:]
+            temp1 = mul_nums_and_fnodes(nums_list, new_variables_list)
+            #print("temp1 is:   %s" % (temp1))
+            content = FNodeContent(13, (temp0_node, temp1), None)
+            temp2 = FNode(content, 400000+i)
+            #print("temp2 is:   %s" % (temp2.simplify()))
+            transform_equations_dict[variable_list[i]] = temp2.simplify()
+
+        print("the transform dictionary is:\n%s" % (transform_equations_dict))
+        print(transform_equations_dict[variable_list[0]])
+        #return transform_equations_dict 
+        #print(transform_equations_dict[variable_list[0].serialize()])
+        
+                
+    else:
+        # if there is no equation, solve the question by spass
         pass
+
+    #From now on ,start step 4.
+    new_inequations = []
+    for f in inequations:
+        new_inequations.append(f.substitute(transform_equations_dict).simplify())
+    print("new inequations is:\n%s" % (new_inequations))
+
+    print(new_inequations[0].args()[0])
+
 
     
 
