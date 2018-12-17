@@ -5,6 +5,9 @@ from pysmt.shortcuts import And, is_sat, get_model, get_unsat_core
 from pysmt.rewritings import conjunctive_partition
 from pysmt.operators import SYMBOL
 from pysmt.typing import INT
+from pysmt.smtlib.script import SmtLibScript, SmtLibCommand
+from pysmt.shortcuts import And
+import pysmt.smtlib.commands as smtcmd
 import numpy as np
 import smith_nf
 
@@ -389,6 +392,8 @@ def test():
 
         print("the transform dictionary is:\n%s" % (transform_equations_dict))
         print(transform_equations_dict[variable_list[0]])
+        print("new variables list is:")
+        print(new_variables_list)
         #return transform_equations_dict 
         #print(transform_equations_dict[variable_list[0].serialize()])
         
@@ -403,7 +408,33 @@ def test():
         new_inequations.append(f.substitute(transform_equations_dict).simplify())
     print("new inequations is:\n%s" % (new_inequations))
 
-    print(new_inequations[0].args()[0])
+    #print(new_inequations[0].args()[0])
+
+    #From now on, start step 5.
+    #Transform equations are stored in a dictionary called transform_equations_dict, and applying this transform, we turn inequations into new_inequations.
+    #In step 6, we need to construct a new script variable for this question, and return the transform dictionary and the new question.
+    #Also, we need to declare the new variable in script
+
+    new_parser = SmtLibParser()
+    new_script = new_parser.get_script(cStringIO(Str))
+    new_assert_command = SmtLibCommand(smtcmd.ASSERT, [And(new_inequations)])
+    #print("new command is:")
+    #print(type(new_command.args))
+    for index,cmd in enumerate(script.commands):
+        if cmd.name == smtcmd.ASSERT:
+            new_script.commands[index] = new_assert_command
+        if cmd.name == smtcmd.DECLARE_FUN:
+            last_declare_fun = index
+
+    for i in range(0, len(new_variables_list)):
+        temp_new_declare_command = SmtLibCommand(smtcmd.DECLARE_FUN, [new_variables_list[i]])
+        new_script.commands.insert(last_declare_fun + i + 1, temp_new_declare_command)
+
+    print("new script's content is:")
+    print(new_script.commands)
+
+    new_script.to_file("./benchmark/new_test4.smt2")
+    
 
 
     
