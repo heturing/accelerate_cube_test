@@ -1,3 +1,9 @@
+import pysmt.smtlib.commands as smtcmd
+import numpy as np
+import smith_nf
+import os
+import sys
+import getopt
 from pysmt.smtlib.parser import SmtLibParser
 from six.moves import cStringIO
 from pysmt.fnode import FNodeContent, FNode
@@ -7,9 +13,6 @@ from pysmt.operators import SYMBOL
 from pysmt.typing import INT
 from pysmt.smtlib.script import SmtLibScript, SmtLibCommand
 from pysmt.shortcuts import And
-import pysmt.smtlib.commands as smtcmd
-import numpy as np
-import smith_nf
 
 # This a used to show the result of a Formula.
 def pre_traversal(tree):
@@ -286,9 +289,38 @@ def mul_nums_and_fnodes(nums, nodes):
     content = FNodeContent(13, tuple(temp), None)
     result = FNode(content, 300000+nums[0])
     return result
-    
+
+# input python ct_new.py -i/--infile to specify a file that contains input question. If this parameter is absent, try to solve all the smt2 file in current directory.
+# The main function is the entry of this program, and it should be start with the parameter sys.argv[1:].
+# Information about parameter.
+# -i/--infile : input file
+def main(argv):
+    input_file = ''
+    try:
+        opts,args = getopt.getopt(sys.argv[1:], "i:",["infile="])
+    except getopt.GetoptError:
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt in ("-i", "--infile"):
+            input_file = arg
+    print 'Input file is "', input_file
+
+# Mode can be 0 or 1. 0 stands for expriment mode adn 1 stands for debug mode. In debug mode, all the intermediate step will be printed.
+    MODE = 1
+
+
+# After getting the input file, we need to extract the file to make a question list.
+    question_list = []
+    with open(input_file) as myFile:
+        for line in myFile:
+            question_list.append(line)
+    if MODE == 1:
+        print "{0} questions need to be solved, and they are {1}".format(len(question_list), question_list)
 
 def test():
+    print("There are {0} parameters, ther are {1}.".format(len(sys.argv), sys.argv))
+    print(getopt.getopt(sys.argv[1:], "ab:c:",["d=","e="]))
+    
     f = open("./benchmark/test4.smt2")
     Str = f.read()
     parser = SmtLibParser()
@@ -335,9 +367,12 @@ def test():
 
     #Construct a new question according to left inequations(new).
     new_questionLQ = reduce(And, new_formulas)
+    # if the new question is still sat, the original question contains no equations.
     if is_sat(new_questionLQ):
         #call spass and return
-        pass
+        #because spass cannot work on mac, we use z3 to test to validaty of this program.
+        os.system("z3 test4.smt2")
+        return
     else:
         unsat_core = analyse_unsat(new_questionLQ)
         for x in unsat_core:
@@ -400,7 +435,7 @@ def test():
                 
     else:
         # if there is no equation, solve the question by spass
-        pass
+        os.system("z3 test4.smt2")
 
     #From now on ,start step 4.
     new_inequations = []
@@ -445,4 +480,4 @@ def test_print(L):
 
 
 if __name__ == "__main__":
-    test()
+    main(sys.argv[1:])
