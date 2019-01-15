@@ -1,2 +1,0 @@
-./benchmark/test1.smt2
-./benckmark/test2.smt2

@@ -303,7 +303,7 @@ def main(argv):
     for opt, arg in opts:
         if opt in ("-i", "--infile"):
             input_file = arg
-    print 'Input file is "', input_file
+    print 'Input file is ', input_file
 
 # Mode can be 0 or 1. 0 stands for expriment mode adn 1 stands for debug mode. In debug mode, all the intermediate step will be printed.
     MODE = 1
@@ -313,25 +313,31 @@ def main(argv):
     question_list = []
     with open(input_file) as myFile:
         for line in myFile:
-            question_list.append(line)
+            question_list.append(line[:-1])
     if MODE == 1:
         print "{0} questions need to be solved, and they are {1}".format(len(question_list), question_list)
 
-def test():
-    print("There are {0} parameters, ther are {1}.".format(len(sys.argv), sys.argv))
-    print(getopt.getopt(sys.argv[1:], "ab:c:",["d=","e="]))
+# All the question are now in question_list, and we need to calculate them one by one.
+    for q in question_list:
+        solve_question(q)
+
+
+# Solve the question in file_path. MODE is used to specify the detail extent of output content.
+def solve_question(file_path, MODE):
+    print "solving question in file", file_path, "..."
     
-    f = open("./benchmark/test4.smt2")
+# Extract target formula from the file, and split the formula if it is consistuted by other primitive formula.
+    f = open(file_path)
     Str = f.read()
     parser = SmtLibParser()
     script = parser.get_script(cStringIO(Str))
     target_formula = script.get_last_formula()
     formulas_arith = list(target_formula.get_atoms())
 
+# Split the formulas into equations and inequations
     equations = []
     inequations = []
 
-    # split formulas into equations and inequations.
     for x in formulas_arith:
        if is_equation(x):
            equations.append(x.simplify())
