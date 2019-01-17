@@ -1,0 +1,63 @@
+=====================================================================
+=========================== GMP vs. FLINT ===========================
+=====================================================================
+
+This folder contains two versions of SPASS-IQ that use different
+libraries for precise arithmetic. One is based on GMP
+(https://gmplib.org/) the other is based on FLINT
+(http://www.flintlib.org/). The FLINT version is slightly faster, but
+the FLINT library is only locally linked (because of the size of the
+FLINT library). To use the FLINT version, FLINT has to be locally
+installed and the library has to be added/linked to a folder that is
+searched for shared libraries. If you do not want to add FLINT
+permanently to the shared libraries, then you can also temporarily
+share it via the command:
+
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:YOUR_LOCAL_PATH_TO_THE_FLINT_INSTALLATION
+
+=====================================================================
+=============================== Usage ===============================
+=====================================================================
+
+SPASSIQ [Options] [Inputfile]
+
+Options:
+
+-h or --help
+print this help
+
+-v or --verbose
+print
+  - 0: only sat/unsat (default)
+  - 1: intermediate search statistics
+  - 2: additional steps
+
+-t or --time
+print detailed timing information
+
+-S or --statistics
+print LA-statistics
+
+-V or --version
+show version and exit
+
+-m or --print-model
+print a model if the clause set is satisfiable
+
+-o or --check-model
+check the model with respect to the clause set if it is satisfiable
+
+-B or --bounding_transformations
+LI(R)A: the branch-and-bound solver applies bounding transformations on partially unbounded problems.
+  - 0: off
+  - 1: on (default)
+
+-T or --print_bounding_transformations
+LI(R)A: the branch-and-bound solver returns the transformed system in SMT-LIB2 format whenever it applies the bounding transformations.
+  - 0: off (default)
+  - 1: on
+
+-C or --cube_test
+LI(R)A: applies the unit cube test to solve absolutely unbounded problems.
+  - 0: off
+  - 1: on (default)

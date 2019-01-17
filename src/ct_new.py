@@ -5,6 +5,7 @@ import sys
 import getopt
 import formula_operation
 import calculation
+import file_operation
 from pysmt.smtlib.parser import SmtLibParser
 from six.moves import cStringIO
 from pysmt.shortcuts import And, is_sat, get_model
@@ -63,24 +64,33 @@ MODE = 1
 def main(argv):
     input_file = ''
     try:
-        opts,args = getopt.getopt(sys.argv[1:], "i:",["infile="])
+        opts,args = getopt.getopt(sys.argv[1:], "i:h",["infile=", "help"])
     except getopt.GetoptError:
         sys.exit(2)
     for opt, arg in opts:
         if opt in ("-i", "--infile"):
             input_file = arg
+        elif opt in ("-h", "--help"):
+            file_operation.help()
+            return True
+            
     print 'Input file is ', input_file
-
-
-# After getting the input file, we need to extract the file to make a question list.
     question_list = []
-    with open(input_file) as myFile:
-        for line in myFile:
-            question_list.append(line[:-1])
+    # If the input question list is noe specified, the program collects all the .smt2 file in current directory.
+    if input_file == '':
+        question_list = file_operation.find_all_smt2_file(".")
+   # Else, we need to extract the file to make a question list.
+    else:
+        with open(input_file) as myFile:
+            for line in myFile:
+                question_list.append(line[:-1])
     if MODE == 1:
         print "{0} questions need to be solved, and they are {1}".format(len(question_list), question_list)
 
 # All the question are now in question_list, and we need to calculate them one by one.
+    if question_list == []:
+        print "No question to be solved. Execute 'python ct_new.py -h' or 'python ct_new.py --help' for help."
+        return True
     for q in question_list:
         solve_question(q,MODE)
 
